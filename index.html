@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f6fed">
+<meta name="description" content="本地血糖记录工具：录入、时间线、趋势、报告。数据只保存在本机浏览器。">
+<title>血糖记录 · GlucoLog</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%A9%B8%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f4f6f9; --card:#ffffff; --ink:#1b2430; --muted:#67727f; --line:#e5e9ef;
+  --accent:#2f6fed;
+  --ok:#2f9e63; --ok-bg:#e6f5ec;
+  --high:#e8792b; --high-bg:#fdf0e3;
+  --low:#d64545; --low-bg:#fde9e9;
+  --lowish:#b7791f; --lowish-bg:#fdf4d8;
+  --grid:#eceff4; --line-strong:#c9d1dc;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#101319; --card:#181c24; --ink:#e9edf3; --muted:#9aa4b2; --line:#262c37;
+    --accent:#5b8def;
+    --ok:#3fbf7d; --ok-bg:#16301f;
+    --high:#f08c3a; --high-bg:#33220f;
+    --low:#e86a6a; --low-bg:#331a1a;
+    --lowish:#d8a64a; --lowish-bg:#332a12;
+    --grid:#232936; --line-strong:#3a4353;
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Segoe UI",Roboto,sans-serif;padding-bottom:84px;max-width:640px;margin:0 auto}
+body.sheet-open{overflow:hidden}
+h1,h2,h3{margin:0;font-weight:600}
+#topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border-bottom:1px solid var(--line)}
+.brand{font-weight:700;font-size:17px}
+main{padding:12px 14px 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.card-title{font-weight:600;margin-bottom:8px}
+.row-between{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.muted{color:var(--muted)}
+.small{font-size:12.5px}
+.center{text-align:center}
+button{font:inherit;color:inherit;border:1px solid transparent;background:none;cursor:pointer;touch-action:manipulation}
+.btn-accent{background:var(--accent);color:#fff;border-radius:999px;padding:8px 16px;font-weight:600}
+.btn-ghost{border:1px solid var(--line);border-radius:10px;padding:8px 12px;color:var(--muted);background:var(--card)}
+.btn-ghost.danger{color:var(--low);border-color:var(--low)}
+.block{display:block;width:100%;margin-top:8px}
+.chip{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:4px 11px;font-size:13px;background:var(--card);color:var(--ink);margin:3px 4px 3px 0}
+.chip.on{border-color:var(--accent);background:var(--accent);color:#fff}
+.chip-wrap{display:flex;flex-wrap:wrap;margin:2px -4px}
+.st-ok{color:var(--ok)} .st-high{color:var(--high)} .st-low{color:var(--low)} .st-lowish{color:var(--lowish)}
+.pill{display:inline-flex;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;vertical-align:middle}
+.pill.st-ok{background:var(--ok-bg)} .pill.st-high{background:var(--high-bg)}
+.pill.st-low{background:var(--low-bg)} .pill.st-lowish{background:var(--lowish-bg)}
+.bigval{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15}
+.unit{font-size:15px;color:var(--muted);font-weight:600;margin-left:4px}
+.statline{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px;text-align:center}
+.statline .v{font-weight:700;font-variant-numeric:tabular-nums}
+.statline .k{font-size:11.5px;color:var(--muted)}
+.metric-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.metric{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.metric .v{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.metric .k{font-size:12px;color:var(--muted)}
+.day-head{display:flex;justify-content:space-between;align-items:baseline;padding:10px 2px 6px;font-weight:600;font-size:14px}
+.day-head .m{margin-left:8px;font-size:12.5px;color:var(--muted);font-weight:400}
+.log-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.log-item:last-child{border-bottom:none}
+.log-val{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;min-width:72px}
+.log-meta{flex:1;min-width:0}
+.log-tags{margin-top:3px;display:flex;flex-wrap:wrap;gap:2px}
+.log-note{color:var(--muted);font-size:13px;margin-top:2px;overflow-wrap:anywhere}
+.log-act{display:flex;gap:2px}
+.icon-btn{width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;color:var(--muted);font-size:15px}
+.icon-btn:active{background:var(--bg)}
+#tabbar{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:640px;display:flex;background:var(--card);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom));z-index:30}
+#tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted);padding:4px 0;border-radius:10px}
+#tabbar button svg{width:22px;height:22px}
+#tabbar button.active{color:var(--accent);font-weight:600}
+.overlay{position:fixed;inset:0;background:rgba(10,14,20,.45);z-index:40;display:flex;align-items:flex-end;justify-content:center;animation:fade .15s ease}
+#onboard{align-items:center;overflow-y:auto;padding:16px 0}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.sheet-panel{background:var(--card);width:100%;max-width:640px;max-height:92vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:14px 16px calc(20px + env(safe-area-inset-bottom));animation:up .2s ease}
+#onboard .sheet-panel{max-width:480px;border-radius:18px;margin:auto 14px;max-height:none}
+@keyframes up{from{transform:translateY(30px);opacity:.5}to{transform:none;opacity:1}}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.kp{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.kp button{height:54px;font-size:22px;font-weight:600;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.kp button:active{background:var(--line)}
+.kp .k-back{color:var(--muted);font-size:16px}
+.field{margin:10px 0}
+.field>label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+input[type=text],input[type=number],input[type=datetime-local],select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 10px;accent-color:var(--accent)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{padding:7px 16px;font-weight:600;color:var(--muted);background:var(--card)}
+.seg button.on{background:var(--accent);color:#fff}
+.targets-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.targets-row span{font-size:11.5px;color:var(--muted);display:block;margin-bottom:3px}
+table.hm{border-collapse:separate;border-spacing:3px;width:100%;font-size:12px}
+.hm th{color:var(--muted);font-weight:600;padding:2px}
+.hm td{text-align:center;border-radius:8px;padding:6px 2px;background:var(--bg);font-variant-numeric:tabular-nums}
+.hm td.ok{background:var(--ok-bg);color:var(--ok)} .hm td.high{background:var(--high-bg);color:var(--high)}
+.hm td.low{background:var(--low-bg);color:var(--low)} .hm td.lowish{background:var(--lowish-bg);color:var(--lowish)}
+.hm td .n{display:block;font-size:10.5px;color:var(--muted)}
+.acc{border:1px solid var(--line);border-radius:12px;margin-bottom:8px;overflow:hidden}
+.acc>button{width:100%;text-align:left;padding:11px 12px;font-weight:600;display:flex;justify-content:space-between;align-items:center;background:var(--bg)}
+.acc .acc-body{padding:2px 12px 12px;color:var(--muted);font-size:13.5px}
+.acc .arrow{transition:transform .15s}
+.acc.open .arrow{transform:rotate(180deg)}
+.banner{border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:13.5px}
+.banner.warn{background:var(--lowish-bg);color:var(--lowish)}
+.banner.info{background:var(--ok-bg);color:var(--ok)}
+canvas{width:100%;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:92px;background:var(--ink);color:var(--bg);padding:9px 18px;border-radius:999px;font-size:14px;z-index:60;max-width:80vw;text-align:center}
+.empty{padding:26px 10px;text-align:center;color:var(--muted)}
+.empty .e{font-size:30px;margin-bottom:6px}
+.med-btn{display:flex;width:100%;align-items:center;justify-content:center;gap:8px;border:1.5px dashed var(--line);border-radius:12px;padding:11px;color:var(--muted);margin-top:8px;font-weight:600}
+.med-btn.done{border-style:solid;border-color:var(--ok);color:var(--ok);background:var(--ok-bg)}
+.recall-tip{font-size:12px;color:var(--muted);margin-top:4px}
+/* AI 问诊 */
+.chat-box{display:flex;flex-direction:column;gap:10px;min-height:200px;max-height:52vh;overflow-y:auto;padding:6px 2px}
+.chat-msg{max-width:92%}
+.chat-msg .who{font-size:11.5px;color:var(--muted);margin-bottom:2px}
+.chat-msg .body{white-space:pre-wrap;word-break:break-word;padding:9px 12px;border-radius:12px;font-size:14.5px}
+.chat-msg.user{align-self:flex-end}
+.chat-msg.user .who{text-align:right}
+.chat-msg.user .body{background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.chat-msg.ai{align-self:flex-start}
+.chat-msg.ai .body{background:var(--bg);border:1px solid var(--line);border-bottom-left-radius:4px}
+.chat-msg.err .body{background:var(--low-bg);color:var(--low)}
+details.refs{margin-top:6px;font-size:12.5px;color:var(--muted);border:1px dashed var(--line);border-radius:8px;padding:6px 10px;background:var(--bg)}
+details.refs summary{cursor:pointer}
+.ref-item{margin-top:6px;border-top:1px solid var(--line);padding-top:6px}
+.ref-item .q{color:var(--ink);font-weight:600}
+.chat-form{display:flex;gap:8px;margin-top:10px}
+.chat-form input{flex:1;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.chat-form input:focus{outline:none;border-color:var(--accent)}
+.chat-form button{border-radius:10px;padding:10px 16px}
+.chat-form button:disabled{opacity:.5}
+.print-only{display:none}
+@media print{
+  body{background:#fff;max-width:none;padding:0;font-size:13px}
+  body.print-mode #topbar,body.print-mode #tabbar,body.print-mode #toast{display:none!important}
+  .no-print{display:none!important}
+  .print-only{display:block}
+  #view{padding:0}
+  .card{box-shadow:none;break-inside:avoid;border-color:#ccc}
+  .print-only h1{font-size:22px}
+  .print-only hr{border:none;border-top:1px solid #999;margin:8px 0 14px}
+}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="brand">🩸 血糖记录</div>
+  <button class="btn-accent" data-action="add">＋ 记一条</button>
+</header>
+<main id="view"></main>
+<nav id="tabbar">
+  <button data-action="nav" data-nav="today">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h5v-6h4v6h5V9.5"/></svg>
+    <span>今日</span>
+  </button>
+  <button data-action="nav" data-nav="log">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01" stroke-width="3"/></svg>
+    <span>记录</span>
+  </button>
+  <button data-action="nav" data-nav="trends">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+    <span>趋势</span>
+  </button>
+  <button data-action="nav" data-nav="report">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>
+    <span>报告</span>
+  </button>
+  <button data-action="nav" data-nav="ask">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 1 1 16 0z"/></svg>
+    <span>问诊</span>
+  </button>
+  <button data-action="nav" data-nav="me">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <span>我的</span>
+  </button>
+</nav>
+<div id="sheet" class="overlay" hidden>
+  <div class="sheet-panel" id="sheetPanel"></div>
+</div>
+<div id="onboard" class="overlay" hidden>
+  <div class="sheet-panel">
+    <h2 style="margin-bottom:6px">🩸 欢迎使用血糖记录</h2>
+    <p class="muted small">先选常用单位并设定目标范围（之后可在「我的」修改）。所有数据只保存在本机浏览器，不上传。</p>
+    <div class="field"><label>血糖单位</label>
+      <div class="seg" id="obUnit">
+        <button class="on" data-action="obUnit" data-val="mmol">mmol/L</button>
+        <button data-action="obUnit" data-val="mgdl">mg/dL</button>
+      </div>
+    </div>
+    <div class="field"><label>目标范围（mmol/L）</label>
+      <div class="targets-row">
+        <div><span>空腹下限</span><input id="obFastLo" type="number" step="0.1" value="4.4"></div>
+        <div><span>空腹上限</span><input id="obFastHi" type="number" step="0.1" value="7.0"></div>
+        <div><span>餐后上限</span><input id="obPostHi" type="number" step="0.1" value="10.0"></div>
+      </div>
+      <div class="muted small" style="margin-top:6px">中国 2 型糖尿病防治指南参考：空腹 4.4–7.0、餐后 2h &lt;10.0、低血糖 ≤3.9 mmol/L（餐后从吃第一口饭计时）。请按医生建议修改。</div>
+    </div>
+    <div class="field"><label>怎么称呼你（可选）</label><input id="obName" type="text" placeholder="例如：妈妈"></div>
+    <button class="btn-accent block" data-action="onboardDone">开始使用</button>
+    <button class="btn-ghost block" data-action="onboardDone">先跳过，用默认设置</button>
+  </div>
+</div>
+<div id="toast" hidden></div>
+<input type="file" id="importFile" accept=".json,application/json" hidden>
+<script>
+'use strict';
+/* ---------- 工具函数 ---------- */
+const $=(s)=>document.querySelector(s);
+const $$=(s)=>Array.from(document.querySelectorAll(s));
+const esc=(s)=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad=(n)=>(n<10?'0':'')+n;
+const DAY=86400000;
+const dateKey=(ts)=>{const d=new Date(ts);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());};
+const startOfDay=(ts)=>{const d=new Date(ts);d.setHours(0,0,0,0);return d.getTime();};
+const toLocalInput=(ts)=>{const d=new Date(ts);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());};
+const fromLocalInput=(s)=>{const t=new Date(s).getTime();return isNaN(t)?NaN:t;};
+const fmtTime=(ts)=>{const d=new Date(ts);return pad(d.getHours())+':'+pad(d.getMinutes());};
+const fmtMD=(ts)=>{const d=new Date(ts);return (d.getMonth()+1)+'月'+d.getDate()+'日';};
+const WEEKCN=['日','一','二','三','四','五','六'];
+const fmtDay=(ts)=>{const d=new Date(ts);return fmtMD(ts)+' 周'+WEEKCN[d.getDay()];};
+const agoText=(ts)=>{const diff=Date.now()-ts;if(diff<60000)return '刚刚';if(diff<3600000)return Math.floor(diff/60000)+' 分钟前';if(diff<DAY)return Math.floor(diff/3600000)+' 小时前';if(diff<7*DAY)return Math.floor(diff/DAY)+' 天前';return fmtMD(ts);};
+const cssVar=(n,f)=>{try{const v=getComputedStyle(document.documentElement).getPropertyValue(n).trim();return v||f;}catch(e){return f;}};
+/* ---------- 常量 ---------- */
+const TAG_META=[
+  {id:'fast',label:'空腹',type:'fast'},{id:'bf',label:'早餐后',type:'post'},
+  {id:'lb',label:'午餐前',type:'pre'},{id:'ln',label:'午餐后',type:'post'},
+  {id:'db',label:'晚餐前',type:'pre'},{id:'dn',label:'晚餐后',type:'post'},
+  {id:'bed',label:'睡前',type:'other'},{id:'night',label:'夜间',type:'other'},
+  {id:'rand',label:'随机',type:'other'}
+];
+const tagById=(id)=>TAG_META.find(t=>t.id===id)||TAG_META[8];
+const CTX_TAGS=[['rice','主食多'],['light','主食少'],['sport','运动了'],['med','已服药'],['alcohol','饮酒'],['sick','生病'],['stress','压力大'],['period','经期']];
+const ctxLabel=(id)=>{const f=CTX_TAGS.find(c=>c[0]===id);return f?f[1]:id;};
+const SOURCES=['指尖血','体检','连续监测','其他'];
+const MGL=18.0182;
+/* ---------- 状态与存储 ---------- */
+const KEY='glucolog.v1';
+function defaults(){return {unit:'mmol',name:'',dxYear:'',medNote:'',targets:{fastLo:4.4,fastHi:7.0,postHi:10.0,hypo:3.9},reminders:{fast:true,post:true},lastBackup:0,onboarded:false,ai:{key:'',base:'',model:''},aiResult:null,workerUrl:'',kbUrl:'med-kb.json',chat:[],readings:[],metas:[],medDays:{}};}
+function load(){
+  try{
+    const raw=localStorage.getItem(KEY);
+    if(raw){
+      const o=JSON.parse(raw);
+      const d=defaults();
+      const s=Object.assign(d,o,{targets:Object.assign(d.targets,o.targets||{}),reminders:Object.assign(d.reminders,o.reminders||{})});
+      if(!Array.isArray(s.readings))s.readings=[];
+      if(!Array.isArray(s.metas))s.metas=[];
+      if(!s.medDays)s.medDays={};
+      if(!Array.isArray(s.chat))s.chat=[];
+      s.readings.sort((a,b)=>a.ts-b.ts);
+      return s;
+    }
+  }catch(e){console.warn('load',e);}
+  return defaults();
+}
+let S=load();
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(S));}
+  catch(e){toast('保存失败：浏览器存储空间不足');}
+}
+/* ---------- 单位与状态 ---------- */
+function fmtVal(v){return S.unit==='mgdl'?String(Math.round(v*MGL)):(+v).toFixed(1);}
+function dispUnit(){return S.unit==='mgdl'?'mg/dL':'mmol/L';}
+function parseVal(str,u){if(!/^[0-9.]+$/.test(str))return null;const n=parseFloat(str);if(!isFinite(n)||n<=0)return null;const v=(u==='mgdl')?n/MGL:n;if(v<0.3||v>45)return null;return v;}
+function statusOf(v,type){
+  const T=S.targets;
+  if(v<T.hypo)return 'low';
+  if(type==='fast'){if(v<T.fastLo)return 'lowish';if(v>T.fastHi)return 'high';return 'ok';}
+  if(type==='post'){if(v>T.postHi)return 'high';return 'ok';}
+  if(v>7.8)return 'high';
+  if(v<4.4)return 'lowish';
+  return 'ok';
+}
+const ST_META={low:{label:'低血糖',cls:'st-low'},lowish:{label:'偏低',cls:'st-lowish'},ok:{label:'达标',cls:'st-ok'},high:{label:'偏高',cls:'st-high'}};
+const stOfReading=(r)=>statusOf(r.v,tagById(r.tag).type);
+/* ---------- 路由与渲染 ---------- */
+let view='today';
+function renderNav(){$$('#tabbar [data-nav]').forEach(b=>b.classList.toggle('active',b.dataset.nav===view));}
+function go(v){view=v;render();window.scrollTo(0,0);}
+function render(){
+  renderNav();
+  const el=$('#view');
+  el.innerHTML=view==='today'?viewToday():view==='log'?viewLog():view==='trends'?viewTrends():view==='report'?viewReport():view==='ask'?viewAsk():viewMe();
+  if(view==='trends')requestAnimationFrame(drawTrends);
+}
+let toastTimer;
+function toast(msg){const t=$('#toast');if(!t)return;t.textContent=msg;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},2200);}
+/* ---------- 今日 ---------- */
+function weekCompare(){
+  const d0=startOfDay(Date.now());
+  const seg=(a,b)=>{const out={fast:[],post:[]};S.readings.forEach(r=>{if(r.ts>=a&&r.ts<b){const ty=tagById(r.tag).type;if(ty==='fast')out.fast.push(r.v);else if(ty==='post')out.post.push(r.v);}});return out;};
+  const cur=seg(d0-6*DAY,d0+DAY),prev=seg(d0-13*DAY,d0-6*DAY);
+  const mean=a=>a.length?(a.reduce((x,y)=>x+y,0)/a.length):null;
+  const fmc=mean(cur.fast),fmp=mean(prev.fast),pmc=mean(cur.post),pmp=mean(prev.post);
+  const parts=[];
+  if(fmc!=null)parts.push('近 7 天空腹均值 <b>'+fmtVal(fmc)+' '+dispUnit()+'</b>'+(fmp!=null?('，较前 7 天'+(fmc>fmp?'升高':'降低')+' '+fmtVal(Math.abs(fmc-fmp))):''));
+  if(pmc!=null)parts.push('近 7 天餐后均值 <b>'+fmtVal(pmc)+' '+dispUnit()+'</b>'+(pmp!=null?('，较前 7 天'+(pmc>pmp?'升高':'降低')+' '+fmtVal(Math.abs(pmc-pmp))):''));
+  return parts;
+}
+function viewToday(){
+  const now=Date.now(),dk=dateKey(now);
+  const todays=S.readings.filter(r=>dateKey(r.ts)===dk).sort((a,b)=>b.ts-a.ts);
+  const latest=S.readings.length?S.readings[S.readings.length-1]:null;
+  let h='';
+  if(latest){
+    const st=ST_META[stOfReading(latest)];
+    h+='<div class="card"><div class="row-between"><span class="muted small">最近一次 · '+agoText(latest.ts)+'</span><button class="icon-btn" data-action="edit" data-id="'+latest.id+'" title="编辑">✎</button></div>'+
+      '<div class="bigval '+st.cls+'">'+fmtVal(latest.v)+'<span class="unit">'+dispUnit()+'</span></div>'+
+      '<div class="log-tags"><span class="chip">'+esc(tagById(latest.tag).label)+'</span><span class="pill '+st.cls+'">'+st.label+'</span></div>'+
+      (latest.note?'<div class="log-note">'+esc(latest.note)+'</div>':'')+
+      '</div>';
+  }else{
+    h+='<div class="card empty"><div class="e">🩸</div><div>还没有记录</div><div class="small muted">点右上角「记一条」，或点下面按钮开始</div><div style="margin-top:10px"><button class="btn-accent" data-action="add">记第一条</button></div></div>';
+  }
+  const tips=[];
+  if(S.reminders.fast&&new Date().getHours()<11&&!todays.some(r=>r.tag==='fast'))tips.push('空腹还没测');
+  if(S.reminders.post&&!todays.some(r=>tagById(r.tag).type==='post'))tips.push('还没有餐后记录');
+  const meanOf=a=>a.length?(a.reduce((x,y)=>x+y,0)/a.length):null;
+  const m=meanOf(todays.map(r=>r.v));
+  const mx=todays.length?Math.max.apply(null,todays.map(r=>r.v)):null;
+  const mn=todays.length?Math.min.apply(null,todays.map(r=>r.v)):null;
+  const med=!!S.medDays[dk];
+  h+='<div class="card"><div class="card-title">今天 · '+fmtDay(now)+'</div>'+
+    '<div class="statline">'+
+    '<div><div class="v">'+todays.length+'</div><div class="k">已测</div></div>'+
+    '<div><div class="v">'+(m!=null?fmtVal(m):'—')+'</div><div class="k">均值</div></div>'+
+    '<div><div class="v">'+(mx!=null?fmtVal(mx):'—')+'</div><div class="k">最高</div></div>'+
+    '<div><div class="v">'+(mn!=null?fmtVal(mn):'—')+'</div><div class="k">最低</div></div>'+
+    '</div>'+
+    '<button class="med-btn'+(med?' done':'')+'" data-action="med">'+(med?'✓ 今天已服药（点此撤销）':'◯ 今天服药了吗？点此打卡')+'</button>'+
+    (tips.length?'<div class="recall-tip">今日待办：'+tips.join('、')+'（提示可在「我的」关闭）</div>':'')+
+    '</div>';
+  const wc=weekCompare();
+  if(wc.length)h+='<div class="card"><div class="card-title">近 7 天</div>'+wc.map(t=>'<div class="muted small" style="margin:3px 0">'+t+'</div>').join('')+'</div>';
+  const daysSince=S.lastBackup?Math.floor((now-S.lastBackup)/DAY):null;
+  if(daysSince===null)h+='<div class="banner warn">还没有导出过备份。数据只存在本机浏览器，建议去「我的 → 导出备份」存一份。</div>';
+  else if(daysSince>7)h+='<div class="banner warn">距上次备份已 '+daysSince+' 天，建议去「我的 → 导出备份」再存一份。</div>';
+  if(todays.length){
+    h+='<div class="card"><div class="card-title">今日记录</div>'+todays.slice(0,8).map(r=>{
+      const st=ST_META[stOfReading(r)];
+      return '<div class="log-item"><div class="log-val '+st.cls+'">'+fmtVal(r.v)+'</div><div class="log-meta"><div><span class="chip">'+esc(tagById(r.tag).label)+'</span><span class="pill '+st.cls+'">'+st.label+'</span> <span class="muted small">'+fmtTime(r.ts)+'</span></div></div></div>';
+    }).join('')+'</div>';
+  }
+  h+='<div class="card row-between"><span class="muted small">更多</span><span><button class="btn-ghost" data-action="gotoLog">查看记录</button> <button class="btn-ghost" data-action="nav" data-nav="trends">趋势</button> <button class="btn-ghost" data-action="nav" data-nav="report">报告</button></span></div>';
+  return h;
+}
+/* ---------- 记录（时间线） ---------- */
+let logF={range:30,tag:'all',status:'all'};
+function viewLog(){
+  const from=logF.range==='all'?0:Date.now()-logF.range*DAY;
+  let list=S.readings.filter(r=>r.ts>=from);
+  if(logF.tag!=='all')list=list.filter(r=>r.tag===logF.tag);
+  if(logF.status!=='all')list=list.filter(r=>stOfReading(r)===logF.status);
+  list=list.slice().sort((a,b)=>b.ts-a.ts);
+  const rngOpts=[['7','近 7 天'],['30','近 30 天'],['90','近 90 天'],['all','全部']].map(s=>'<option value="'+s[0]+'"'+(String(logF.range)===s[0]?' selected':'')+'>'+s[1]+'</option>').join('');
+  const tagOpts='<option value="all"'+(logF.tag==='all'?' selected':'')+'>全部时段</option>'+TAG_META.map(t=>'<option value="'+t.id+'"'+(logF.tag===t.id?' selected':'')+'>'+t.label+'</option>').join('');
+  const stOpts=[['all','全部状态'],['ok','达标'],['high','偏高'],['lowish','偏低'],['low','低血糖']].map(s=>'<option value="'+s[0]+'"'+(logF.status===s[0]?' selected':'')+'>'+s[1]+'</option>').join('');
+  let h='<div class="card"><div class="row-between"><h2>记录</h2><button class="btn-accent" data-action="add">＋ 补录</button></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">'+
+    '<select id="logRange">'+rngOpts+'</select>'+
+    '<select id="logTag">'+tagOpts+'</select>'+
+    '<select id="logStatus">'+stOpts+'</select>'+
+    '</div></div>';
+  if(!list.length){h+='<div class="card empty"><div class="e">📭</div><div>这个筛选下没有记录</div></div>';return h;}
+  const groups=[];let cur=null;
+  list.forEach(r=>{const k=dateKey(r.ts);if(!cur||cur.key!==k){cur={key:k,items:[]};groups.push(cur);}cur.items.push(r);});
+  groups.forEach(g=>{
+    const vals=g.items.map(r=>r.v);
+    const mean=vals.reduce((x,y)=>x+y,0)/vals.length;
+    h+='<div class="card" style="padding-top:4px"><div class="day-head"><span>'+fmtDay(g.items[0].ts)+'</span><span class="m">'+g.items.length+' 次 · 均值 '+fmtVal(mean)+'</span></div>';
+    g.items.forEach(r=>{
+      const st=ST_META[stOfReading(r)],t=tagById(r.tag);
+      h+='<div class="log-item"><div class="log-val '+st.cls+'">'+fmtVal(r.v)+'</div>'+
+        '<div class="log-meta"><div><span class="chip">'+esc(t.label)+'</span><span class="pill '+st.cls+'">'+st.label+'</span><span class="muted small"> '+fmtTime(r.ts)+(r.recalled?' · 补录':'')+'</span></div>'+
+        ((r.ctx&&r.ctx.length)?'<div class="log-tags">'+r.ctx.map(c=>'<span class="chip">'+esc(ctxLabel(c))+'</span>').join('')+'</div>':'')+
+        (r.note?'<div class="log-note">'+esc(r.note)+'</div>':'')+
+        '<div class="muted small">来源：'+esc(r.src||'指尖血')+'</div></div>'+
+        '<div class="log-act"><button class="icon-btn" data-action="edit" data-id="'+r.id+'" title="编辑">✎</button><button class="icon-btn" data-action="del" data-id="'+r.id+'" title="删除" style="color:var(--low)">🗑</button></div>'+
+        '</div>';
+    });
+    h+='</div>';
+  });
+  return h;
+}
+/* ---------- 趋势 ---------- */
+let trendF={range:30};
+function viewTrends(){
+  const from=Date.now()-trendF.range*DAY;
+  const list=S.readings.filter(r=>r.ts>=from).sort((a,b)=>a.ts-b.ts);
+  const ok=list.filter(r=>stOfReading(r)==='ok').length;
+  const mean=list.length?list.reduce((x,y)=>x+y,0)/list.length:null;
+  const mx=list.length?Math.max.apply(null,list.map(r=>r.v)):null;
+  const mn=list.length?Math.min.apply(null,list.map(r=>r.v)):null;
+  const rngOpts=[[7,'近 7 天'],[30,'近 30 天'],[90,'近 90 天']].map(s=>'<option value="'+s[0]+'"'+(trendF.range===s[0]?' selected':'')+'>'+s[1]+'</option>').join('');
+  let h='<div class="card"><div class="row-between"><h2>趋势</h2><select id="trendRange">'+rngOpts+'</select></div>'+
+    '<div class="statline">'+
+    '<div><div class="v">'+list.length+'</div><div class="k">读数</div></div>'+
+    '<div><div class="v">'+(list.length?Math.round(ok/list.length*100)+'%':'—')+'</div><div class="k">达标率</div></div>'+
+    '<div><div class="v">'+(mean!=null?fmtVal(mean):'—')+'</div><div class="k">均值</div></div>'+
+    '<div><div class="v">'+(mx!=null?fmtVal(mx):'—')+'</div><div class="k">最高</div></div>'+
+    '</div></div>';
+  h+='<div class="card"><div class="card-title">全部读数</div><canvas id="mainChart" style="height:240px"></canvas>'+
+    '<div class="legend"><span><i style="background:var(--ok)"></i>达标</span><span><i style="background:var(--high)"></i>偏高</span><span><i style="background:var(--lowish)"></i>偏低</span><span><i style="background:var(--low)"></i>低血糖</span><span>绿色带=空腹目标 '+fmtVal(S.targets.fastLo)+'–'+fmtVal(S.targets.fastHi)+'；橙虚线=餐后上限 '+fmtVal(S.targets.postHi)+'；红虚线=低血糖线 '+fmtVal(S.targets.hypo)+'</span></div></div>';
+  h+='<div class="card"><div class="card-title">空腹 · 每日均值</div><canvas id="miniFast" style="height:150px"></canvas></div>';
+  h+='<div class="card"><div class="card-title">餐后 · 每日均值</div><canvas id="miniPost" style="height:150px"></canvas></div>';
+  h+='<div class="card"><div class="card-title">时段 × 星期（近 '+trendF.range+' 天）</div>'+heatmapHTML(from)+'<div class="muted small" style="margin-top:6px">格内为平均血糖（次数），颜色按各时段目标；“—”=该时段没有记录</div></div>';
+  return h;
+}
+function heatmapHTML(from){
+  const cols=[['fast','空腹','fast'],['bf','早餐后','post'],['ln','午餐后','post'],['dn','晚餐后','post'],['bed','睡前','other']];
+  const cells={};
+  for(let w=0;w<7;w++)cells[w]={};
+  S.readings.forEach(r=>{
+    if(r.ts<from)return;
+    const col=cols.find(c=>c[0]===r.tag);
+    if(!col)return;
+    const w=new Date(r.ts).getDay();
+    const c=cells[w][col[0]]||(cells[w][col[0]]={s:0,n:0});
+    c.s+=r.v;c.n++;
+  });
+  let h='<table class="hm"><thead><tr><th>星期</th>'+cols.map(c=>'<th>'+c[1]+'</th>').join('')+'</tr></thead><tbody>';
+  [1,2,3,4,5,6,0].forEach(w=>{
+    h+='<tr><td>周'+WEEKCN[w]+'</td>';
+    cols.forEach(c=>{
+      const cell=cells[w][c[0]];
+      if(!cell){h+='<td>—</td>';return;}
+      const m=cell.s/cell.n;
+      const st=statusOf(m,c[2]);
+      h+='<td class="'+st+'">'+fmtVal(m)+'<span class="n">'+cell.n+' 次</span></td>';
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  return h;
+}
+function dailyMeans(type){
+  const map=new Map();
+  S.readings.forEach(r=>{
+    if(tagById(r.tag).type!==type)return;
+    const k=dateKey(r.ts);
+    let e=map.get(k);
+    if(!e){e={ts:startOfDay(r.ts),s:0,n:0};map.set(k,e);}
+    e.s+=r.v;e.n++;
+  });
+  const out=[];
+  map.forEach(e=>out.push({ts:e.ts,v:e.s/e.n}));
+  out.sort((a,b)=>a.ts-b.ts);
+  return out;
+}
+/* ---------- Canvas 图表 ---------- */
+const ST_HEX={low:'#d64545',lowish:'#b7791f',ok:'#2f9e63',high:'#e8792b'};
+function setupCanvas(cv,h){
+  if(!cv)return null;
+  const dpr=window.devicePixelRatio||1;
+  const w=cv.clientWidth||(cv.parentElement&&cv.parentElement.clientWidth)||300;
+  cv.width=Math.max(10,w*dpr);cv.height=Math.max(10,h*dpr);
+  const ctx=cv.getContext('2d');
+  if(!ctx)return null;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx:ctx,w:w,h:h};
+}
+function drawLineChart(cv,list,o){
+  const c=setupCanvas(cv,o.height||240);
+  if(!c)return;
+  const ctx=c.ctx,w=c.w,h=c.h;
+  const padL=o.noAxis?6:42,padR=8,padT=12,padB=22;
+  ctx.clearRect(0,0,w,h);
+  if(!list.length){
+    ctx.fillStyle=cssVar('--muted','#888');
+    ctx.font='13px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('暂无数据',w/2,h/2);
+    return;
+  }
+  let vmin=Math.min.apply(null,list.map(r=>r.v));
+  let vmax=Math.max.apply(null,list.map(r=>r.v));
+  if(o.forceMin!=null)vmin=Math.min(vmin,o.forceMin);
+  if(o.forceMax!=null)vmax=Math.max(vmax,o.forceMax);
+  vmin=Math.min(vmin,S.targets.hypo-0.3);
+  const padV=(vmax-vmin)*0.18||1;
+  vmin-=padV;vmax+=padV;
+  const t0=list[0].ts,t1=list[list.length-1].ts;
+  const X=t=>padL+((t1===t0)?0:(t-t0)/(t1-t0)*(w-padL-padR))+((t1===t0)?(w-padL-padR)/2:0);
+  const Y=v=>(h-padB)-(v-vmin)/(vmax-vmin)*(h-padT-padB);
+  (o.bands||[]).forEach(b=>{
+    ctx.fillStyle=b.color;
+    ctx.fillRect(padL,Y(b.hi),w-padL-padR,Math.max(1,Y(b.lo)-Y(b.hi)));
+  });
+  const yMax=Math.max(0.5,(vmax-vmin)/5);
+  const step=Math.max(0.5,Math.ceil(yMax*2)/2);
+  ctx.strokeStyle=cssVar('--grid','#eceff4');
+  ctx.fillStyle=cssVar('--muted','#888');
+  ctx.font='11px sans-serif';ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let v=Math.ceil(vmin/step)*step;v<=vmax;v+=step){
+    const vv=Math.round(v*10)/10;
+    ctx.beginPath();ctx.moveTo(padL,Y(vv));ctx.lineTo(w-padR,Y(vv));ctx.stroke();
+    if(!o.noAxis)ctx.fillText(o.axisVal?o.axisVal(vv):fmtVal(vv),padL-6,Y(vv));
+  }
+  (o.lines||[]).forEach(l=>{
+    ctx.strokeStyle=l.color;ctx.setLineDash(l.dash||[]);ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(padL,Y(l.y));ctx.lineTo(w-padR,Y(l.y));ctx.stroke();
+    ctx.setLineDash([]);
+  });
+  ctx.fillStyle=cssVar('--muted','#888');
+  ctx.font='11px sans-serif';ctx.textAlign='center';ctx.textBaseline='top';
+  const nT=Math.min(6,Math.max(2,Math.floor((w-padL-padR)/64)));
+  if(list.length===1){
+    ctx.fillText(o.xLabel(list[0].ts),X(list[0].ts),h-padB+5);
+  }else{
+    for(let i=0;i<nT;i++){
+      const idx=Math.min(list.length-1,Math.round(i*(list.length-1)/(nT-1)));
+      ctx.fillText(o.xLabel(list[idx].ts),X(list[idx].ts),h-padB+5);
+    }
+  }
+  ctx.strokeStyle=cssVar('--line-strong','#c9d1dc');ctx.lineWidth=1.5;ctx.beginPath();
+  list.forEach((r,i)=>{const x=X(r.ts),y=Y(r.v);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+  ctx.stroke();
+  list.forEach(r=>{
+    const x=X(r.ts),y=Y(r.v);
+    ctx.fillStyle=ST_HEX[stOfReading(r)]||'#999';
+    ctx.beginPath();ctx.arc(x,y,3.2,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle=cssVar('--card','#fff');ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(x,y,3.2,0,Math.PI*2);ctx.stroke();
+  });
+}
+function drawTrends(){
+  const from=Date.now()-trendF.range*DAY;
+  const list=S.readings.filter(r=>r.ts>=from).sort((a,b)=>a.ts-b.ts);
+  const bandColor=cssVar('--ok-bg','#e6f5ec');
+  const xl=ts=>trendF.range<=7?('周'+WEEKCN[new Date(ts).getDay()]):fmtMD(ts);
+  drawLineChart($('#mainChart'),list,{height:240,bands:[{lo:S.targets.fastLo,hi:S.targets.fastHi,color:bandColor}],lines:[{y:S.targets.postHi,color:'#e8792b',dash:[6,4]},{y:S.targets.hypo,color:'#d64545',dash:[4,4]}],xLabel:xl});
+  const fast=dailyMeans('fast').filter(p=>p.ts>=from);
+  const post=dailyMeans('post').filter(p=>p.ts>=from);
+  drawLineChart($('#miniFast'),fast,{height:150,bands:[{lo:S.targets.fastLo,hi:S.targets.fastHi,color:bandColor}],xLabel:xl,forceMin:S.targets.fastLo-1.5,forceMax:S.targets.fastHi+2});
+  drawLineChart($('#miniPost'),post,{height:150,lines:[{y:S.targets.postHi,color:'#e8792b',dash:[6,4]}],xLabel:xl,forceMin:S.targets.hypo-0.5,forceMax:S.targets.postHi+2});
+}
+/* ---------- 报告 ---------- */
+let reportF={range:30};
+function reportStats(){
+  const from=Date.now()-reportF.range*DAY;
+  const list=S.readings.filter(r=>r.ts>=from);
+  const n=list.length;
+  if(!n)return null;
+  const meanOf=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+  const fast=list.filter(r=>tagById(r.tag).type==='fast');
+  const post=list.filter(r=>tagById(r.tag).type==='post');
+  const ok=list.filter(r=>stOfReading(r)==='ok').length;
+  const hypo=list.filter(r=>r.v<S.targets.hypo).length;
+  const d0=startOfDay(Date.now());
+  let days=0,done=0;
+  for(let t=d0-(reportF.range-1)*DAY;t<=d0;t+=DAY){days++;if(S.medDays[dateKey(t)])done++;}
+  const metas=S.metas.filter(m=>m.ts>=from).sort((a,b)=>b.ts-a.ts);
+  return {n:n,okRate:Math.round(ok/n*100),fastMean:meanOf(fast.map(r=>r.v)),postMean:meanOf(post.map(r=>r.v)),
+    max:Math.max.apply(null,list.map(r=>r.v)),min:Math.min.apply(null,list.map(r=>r.v)),
+    hypo:hypo,days:days,done:done,medRate:Math.round(done/days*100),
+    w:metas.find(m=>m.kind==='weight'),h:metas.find(m=>m.kind==='hba1c'),b:metas.find(m=>m.kind==='bp')};
+}
+/* ---------- 本地智能分析 ---------- */
+function buildAnalysis(){
+  const from=Date.now()-reportF.range*DAY;
+  const days=reportF.range;
+  const list=S.readings.filter(r=>r.ts>=from);
+  if(list.length<5){
+    return ['记录还不够：再记 '+(5-list.length)+' 次（最好覆盖空腹和餐后 2h），这里就会自动生成分析。'];
+  }
+  const mean=a=>a.length?(a.reduce((x,y)=>x+y,0)/a.length):null;
+  const fast=list.filter(r=>tagById(r.tag).type==='fast');
+  const post=list.filter(r=>tagById(r.tag).type==='post');
+  const okN=list.filter(r=>stOfReading(r)==='ok').length;
+  const parts=[];
+  parts.push('近 '+days+' 天共记录 '+list.length+' 次，整体达标率 '+Math.round(okN/list.length*100)+'%。');
+  if(fast.length){
+    const fm=mean(fast.map(r=>r.v));
+    const fok=fast.filter(r=>stOfReading(r)==='ok').length;
+    let s='空腹平均 '+fmtVal(fm)+' '+dispUnit()+'（'+fast.length+' 次中 '+fok+' 次达标）。';
+    if(fm<S.targets.hypo)s+='空腹平均值已到低血糖范围，请尽快就医。';
+    else if(fm<S.targets.fastLo)s+='空腹略偏低，注意睡前加餐、避免空腹时间过长。';
+    else if(fm>S.targets.fastHi)s+='空腹整体偏高，建议和医生讨论是否需要调整方案。';
+    else s+='空腹控制得不错。';
+    parts.push(s);
+  }
+  if(post.length){
+    const pm=mean(post.map(r=>r.v));
+    const pok=post.filter(r=>stOfReading(r)==='ok').length;
+    let s='餐后平均 '+fmtVal(pm)+' '+dispUnit()+'（'+post.length+' 次中 '+pok+' 次达标）。';
+    if(pm>S.targets.postHi)s+='餐后偏高较多，可以试试：主食减量或换粗粮、餐后散步 20 分钟、先吃菜和蛋白质再吃主食。';
+    else if(pm>S.targets.postHi-1)s+='餐后接近上限，留意每餐的主食量。';
+    else s+='餐后控制得不错。';
+    parts.push(s);
+  }
+  const d0=startOfDay(Date.now());
+  const meanIn=(a,b,type)=>{const arr=[];S.readings.forEach(r=>{if(r.ts>=a&&r.ts<b&&tagById(r.tag).type===type)arr.push(r.v);});return mean(arr);};
+  const fmCur=meanIn(d0-6*DAY,d0+DAY,'fast'),fmPrev=meanIn(d0-13*DAY,d0-6*DAY,'fast');
+  if(fmCur!=null&&fmPrev!=null&&Math.abs(fmCur-fmPrev)>=0.5){
+    parts.push('空腹近 7 天均值 '+fmtVal(fmCur)+'，比前 7 天（'+fmtVal(fmPrev)+'）'+(fmCur>fmPrev?'升高':'下降')+' '+fmtVal(Math.abs(fmCur-fmPrev))+'。'+(fmCur>fmPrev?'如果持续上升，建议带着记录找医生看看。':'趋势向好，继续保持。'));
+  }
+  const tagStat={};
+  list.forEach(r=>{const k=r.tag;const e=tagStat[k]||(tagStat[k]={n:0,hi:0});e.n++;if(stOfReading(r)==='high')e.hi++;});
+  let worst=null;
+  Object.keys(tagStat).forEach(k=>{const e=tagStat[k];if(e.n>=3&&(!worst||e.hi/e.n>worst.hi/worst.n))worst={k:k,hi:e.hi,n:e.n};});
+  if(worst&&worst.hi>0)parts.push('超标最集中的时段是「'+tagById(worst.k).label+'」（'+worst.hi+'/'+worst.n+' 次超标）。');
+  const withRice=list.filter(r=>(r.ctx||[]).indexOf('rice')>=0);
+  if(withRice.length>=3){
+    const hiR=withRice.filter(r=>stOfReading(r)==='high').length;
+    parts.push('标记了「主食多」的 '+withRice.length+' 次记录中 '+hiR+' 次偏高（'+Math.round(hiR/withRice.length*100)+'%）——主食量可能是主要影响因素。');
+  }
+  const hypo=list.filter(r=>r.v<S.targets.hypo).length;
+  if(hypo>0)parts.push('⚠️ 出现 '+hypo+' 次低血糖（<'+fmtVal(S.targets.hypo)+' '+dispUnit()+'）。低血糖比高血糖更危险：随身带糖、查明原因，反复发生要及时就医。');
+  let dN=0,dDone=0;
+  for(let t=d0-(days-1)*DAY;t<=d0;t+=DAY){dN++;if(S.medDays[dateKey(t)])dDone++;}
+  if(dDone>0)parts.push('服药打卡 '+dDone+'/'+dN+' 天（'+Math.round(dDone/dN*100)+'%），坚持按时用药是控糖的基础。');
+  if(fast.length>=7&&mean(fast.map(r=>r.v))>S.targets.fastHi+0.5)parts.push('空腹持续高于目标较多，建议近期复诊，带上导出的报告和医生讨论。');
+  parts.push('以上是数据规律的客观描述和通用生活方式建议，不构成医疗建议；用药调整请咨询医生。');
+  return parts;
+}
+/* ---------- AI 问诊（方案二：本地知识库 + Cloudflare Worker + DeepSeek） ---------- */
+let KB=null;
+let kbState='idle';
+let chatHist=[];
+function bigrams(text){
+  const t=String(text).replace(/[^\u4e00-\u9fffA-Za-z0-9]/g,'');
+  if(t.length<2)return t?[t]:[];
+  const out=[];
+  for(let i=0;i<t.length-1;i++)out.push(t.slice(i,i+2));
+  return out;
+}
+function searchLocal(query,topk){
+  if(!KB)return [];
+  const scores={},seen={};
+  bigrams(query).forEach(bg=>{
+    if(seen[bg])return;
+    seen[bg]=1;
+    const ids=KB.idx[bg];
+    if(!ids||!ids.length)return;
+    const idf=Math.log((KB.n-ids.length+0.5)/(ids.length+0.5)+1.0);
+    ids.forEach(i=>{scores[i]=(scores[i]||0)+idf;});
+  });
+  return Object.keys(scores).map(i=>[i,scores[i]]).sort((a,b)=>b[1]-a[1]).slice(0,topk||3).map(p=>KB.docs[p[0]]);
+}
+function loadAskKB(){
+  const url=(S.kbUrl||'med-kb.json').trim()||'med-kb.json';
+  kbState='loading';
+  fetch(url).then(r=>r.json()).then(data=>{
+    KB=data;
+    KB.n=data.docs.length;
+    kbState='ok';
+    const tip=$('#chatTip');
+    if(tip)tip.textContent='知识库已加载（'+data.docs.length+' 条），回答会结合本地医学知识';
+  }).catch(()=>{
+    kbState='fail';
+    const tip=$('#chatTip');
+    if(tip)tip.textContent='知识库加载失败：请把 med-kb.json 放到本页同目录（可在「我的 → AI 问诊」改地址）';
+  });
+}
+function askConfigured(){
+  const u=(S.workerUrl||'').trim();
+  return !!u&&/^https?:\/\//.test(u)&&u.indexOf('你的worker')<0&&u.indexOf('xxx')<0;
+}
+function renderChatHTML(){
+  return S.chat.map(m=>{
+    const cls='chat-msg '+(m.role==='user'?'user':'ai')+(m.err?' err':'');
+    const refs=(m.refs&&m.refs.length)?
+      '<details class="refs"><summary>查看参考问答（本地知识库检索）</summary>'+
+      m.refs.map(r=>'<div class="ref-item"><div class="q">'+esc(r.q)+'</div>'+esc(r.a)+'</div>').join('')+'</details>':'';
+    return '<div class="'+cls+'"><div class="who">'+(m.role==='user'?'我':'AI 助手')+'</div><div class="body">'+esc(m.body)+'</div>'+refs+'</div>';
+  }).join('');
+}
+function viewAsk(){
+  if(!KB&&kbState!=='loading')loadAskKB();
+  const ok=askConfigured();
+  let h='';
+  if(!ok){
+    h+='<div class="banner warn">AI 问诊还没配置：① 在 Cloudflare 创建 Worker，粘贴仓库里的 worker.js；② Worker 设置里添加密钥 DEEPSEEK_API_KEY；③ 把 med-kb.json 与本页放同一目录；④ 把 Worker 网址填到「我的 → AI 问诊」。<button class="btn-ghost" data-action="nav" data-nav="me" style="margin-left:6px;padding:4px 10px">去配置</button></div>';
+  }
+  h+='<div class="banner info">本助手由 AI 生成内容，仅供参考，不能替代医生诊断；急重症请立即就医。</div>';
+  h+='<div class="card" style="padding:10px 12px">'+
+    '<div class="chat-box" id="chatMsgs">'+renderChatHTML()+'</div>'+
+    '<div class="muted small" id="chatTip">'+(KB?('知识库已加载（'+KB.n+' 条）'):(kbState==='fail'?'知识库加载失败：请把 med-kb.json 放到本页同目录':'知识库加载中…'))+'</div>'+
+    '<form id="chatForm" class="chat-form">'+
+    '<input id="chatInput" type="text" placeholder="'+(ok?'描述症状或问健康问题，如：空腹血糖偏高平时怎么吃':'先完成配置后才能提问')+'" autocomplete="off"'+(ok?'':' disabled')+'>'+
+    '<button type="submit" class="btn-accent"'+(ok?'':' disabled')+'>发送</button>'+
+    '</form>'+
+    '<div style="text-align:right;margin-top:6px"><button class="btn-ghost" data-action="chatClear" style="font-size:12.5px;padding:4px 12px">清空对话</button></div>'+
+    '</div>';
+  return h;
+}
+function chatAppend(role,text,refs,isErr){
+  S.chat.push({role:role,body:text,refs:refs||null,err:!!isErr});
+  if(S.chat.length>80)S.chat=S.chat.slice(-80);
+  save();
+  const box=$('#chatMsgs');
+  if(box){box.innerHTML=renderChatHTML();box.scrollTop=box.scrollHeight;}
+}
+function chatPending(){
+  S.chat.push({role:'ai',body:'正在查询，请稍候…',pending:true});
+  const box=$('#chatMsgs');
+  if(box){box.innerHTML=renderChatHTML();box.scrollTop=box.scrollHeight;}
+}
+function chatPopPending(){
+  let changed=false;
+  while(S.chat.length&&S.chat[S.chat.length-1].pending){S.chat.pop();changed=true;}
+  if(changed)save();
+}
+function sendChat(text){
+  chatAppend('user',text);
+  chatHist.push({role:'user',content:text});
+  if(chatHist.length>12)chatHist=chatHist.slice(-12);
+  const refs=searchLocal(text,3);
+  chatPending();
+  fetch((S.workerUrl||'').trim().replace(/\/+$/,'')+'/ask',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({q:text,refs:refs,history:chatHist})
+  }).then(r=>r.json()).then(data=>{
+    chatPopPending();
+    if(data.error){
+      chatAppend('ai','出错了：'+data.error,null,true);
+    }else{
+      chatAppend('ai',data.answer,refs);
+      chatHist.push({role:'assistant',content:data.answer});
+      if(chatHist.length>12)chatHist=chatHist.slice(-12);
+    }
+  }).catch(err=>{
+    chatPopPending();
+    chatAppend('ai','请求失败：'+err+'（请确认 Worker 已部署、网址正确）',null,true);
+  });
+}
+/* ---------- AI 大模型（可选，自带 API Key） ---------- */
+const AI_PRESETS=[
+  {name:'DeepSeek（推荐，国内可用）',base:'https://api.deepseek.com/chat/completions',model:'deepseek-chat'},
+  {name:'硅基流动 SiliconFlow',base:'https://api.siliconflow.cn/v1/chat/completions',model:'deepseek-ai/DeepSeek-V3'},
+  {name:'OpenAI',base:'https://api.openai.com/v1/chat/completions',model:'gpt-4o-mini'},
+  {name:'Moonshot Kimi',base:'https://api.moonshot.cn/v1/chat/completions',model:'moonshot-v1-8k'}
+];
+const AI_SYSTEM='你是一位数据分析助手，帮助用户理解自己的血糖记录。规则：1) 只基于提供的数据描述规律与趋势，不要编造数据里没有的内容；2) 严禁给出任何药物调整、剂量或诊疗建议，涉及用药一律回答「请咨询医生」；3) 可以给通用生活方式建议（饮食、运动、作息、测量习惯）；4) 出现危险信号（反复低血糖、血糖持续很高）时提醒及时就医；5) 用简体中文，300 字以内，分点输出，语气平和，不夸大不吓唬。';
+let aiBusy=false;
+function aiDataSummary(days){
+  const from=Date.now()-days*DAY;
+  const list=S.readings.filter(r=>r.ts>=from);
+  const tagStat={};
+  list.forEach(r=>{const k=r.tag;const e=tagStat[k]||(tagStat[k]={n:0,s:0,ok:0});e.n++;e.s+=r.v;if(stOfReading(r)==='ok')e.ok++;});
+  const ctxStat={};
+  list.forEach(r=>{(r.ctx||[]).forEach(c=>{const e=ctxStat[c]||(ctxStat[c]={n:0,hi:0});e.n++;if(stOfReading(r)==='high')e.hi++;});});
+  let dN=0,dDone=0;
+  const d0=startOfDay(Date.now());
+  for(let t=d0-(days-1)*DAY;t<=d0;t+=DAY){dN++;if(S.medDays[dateKey(t)])dDone++;}
+  const metas=S.metas.filter(m=>m.ts>=from).sort((a,b)=>b.ts-a.ts);
+  const w=metas.find(m=>m.kind==='weight'),h=metas.find(m=>m.kind==='hba1c'),bp=metas.find(m=>m.kind==='bp');
+  return {
+    统计范围天数:days,
+    血糖单位:S.unit,
+    用户称呼:S.name||'未填写',
+    目标:{空腹范围:[S.targets.fastLo,S.targets.fastHi],餐后上限:S.targets.postHi,低血糖线:S.targets.hypo},
+    读数总数:list.length,
+    各时段统计:Object.keys(tagStat).reduce((o,k)=>{const e=tagStat[k];o[tagById(k).label]={次数:e.n,均值:+(e.s/e.n).toFixed(2),达标次数:e.ok};return o;},{}),
+    低血糖次数:list.filter(r=>r.v<S.targets.hypo).length,
+    情景标签统计:Object.keys(ctxStat).reduce((o,k)=>{o[ctxLabel(k)]={出现次数:ctxStat[k].n,其中偏高:ctxStat[k].hi};return o;},{}),
+    服药打卡:'近'+days+'天打卡'+dDone+'/'+dN+'天',
+    最近体重Kg:w?w.v1:null,
+    最近HbA1c:h?h.v1:null,
+    最近血压:bp?(bp.v1+'/'+bp.v2):null,
+    用药方案:S.medNote||'未填写'
+  };
+}
+async function aiCall(messages){
+  const ai=S.ai||{};
+  if(!(ai.key&&ai.base&&ai.model))throw new Error('未配置 API Key，请到「我的」里设置');
+  let res;
+  try{
+    res=await fetch(ai.base,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+ai.key},
+      body:JSON.stringify({model:ai.model,messages:messages,temperature:0.3,max_tokens:800})
+    });
+  }catch(err){
+    throw new Error('网络请求失败：该接口可能不允许浏览器直连（CORS），或地址不正确');
+  }
+  if(!res.ok){
+    let detail='';
+    try{detail=String(await res.text()).slice(0,120);}catch(err){}
+    throw new Error('接口返回 HTTP '+res.status+(detail?'：'+detail:''));
+  }
+  const j=await res.json();
+  const txt=j&&j.choices&&j.choices[0]&&j.choices[0].message?j.choices[0].message.content:'';
+  if(!txt)throw new Error('接口返回内容为空');
+  return txt;
+}
+async function aiGenerate(){
+  if(aiBusy)return;
+  const ai=S.ai||{};
+  if(!(ai.key&&ai.base&&ai.model)){toast('请先在「我的」里配置 AI 接口');return;}
+  aiBusy=true;
+  const btn=document.querySelector('[data-action="aiGen"]');
+  if(btn){btn.disabled=true;btn.textContent='生成中，请稍候…';}
+  try{
+    const summary=JSON.stringify(aiDataSummary(reportF.range),null,1);
+    const txt=await aiCall([
+      {role:'system',content:AI_SYSTEM},
+      {role:'user',content:'以下是用户近期的血糖记录数据摘要（JSON），请按你的规则解读：\n'+summary}
+    ]);
+    S.aiResult={text:txt,at:Date.now(),range:reportF.range};
+    save();
+    render();
+  }catch(err){
+    toast('生成失败：'+(err&&err.message?err.message:err));
+    if(btn){btn.disabled=false;btn.textContent='生成 AI 解读（发送近 '+reportF.range+' 天数据摘要）';}
+  }
+  aiBusy=false;
+}
+function viewReport(){
+  const st=reportStats();
+  const rngOpts=[[14,'近 14 天'],[30,'近 30 天'],[90,'近 90 天']].map(s=>'<option value="'+s[0]+'"'+(reportF.range===s[0]?' selected':'')+'>'+s[1]+'</option>').join('');
+  let h='<div class="card no-print"><div class="row-between"><h2>报告</h2><select id="reportRange">'+rngOpts+'</select></div></div>';
+  h+='<div class="print-only"><h1>血糖记录报告</h1><div class="muted">期间：'+fmtDay(Date.now()-reportF.range*DAY)+' 至 '+fmtDay(Date.now())+' · 生成于 '+fmtDay(Date.now())+' '+fmtTime(Date.now())+(S.name?' · '+esc(S.name):'')+'</div><hr></div>';
+  const an=buildAnalysis();
+  h+='<div class="card"><div class="row-between"><div class="card-title">智能分析（本地生成，数据不出手机）</div><button class="btn-ghost no-print" data-action="copyAnalysis">复制</button></div><div id="analysisText">'+an.map(t=>'<p style="margin:6px 0">'+t+'</p>').join('')+'</div></div>';
+  const ai=S.ai||{key:'',base:'',model:''};
+  const hasAi=!!(ai.key&&ai.base&&ai.model);
+  h+='<div class="card no-print" id="aiCard"><div class="card-title">AI 深度解读（大模型）</div>';
+  if(!hasAi){
+    h+='<div class="muted small">想用大模型解读数据？先去「我的 → AI 分析设置」填一个 API Key（推荐 DeepSeek，便宜且国内可用）。</div>';
+  }else{
+    h+='<button class="btn-ghost block" data-action="aiGen"'+(aiBusy?' disabled':'')+'>'+(aiBusy?'生成中，请稍候…':'生成 AI 解读（发送近 '+reportF.range+' 天数据摘要）')+'</button>';
+    const r=S.aiResult||null;
+    if(r&&r.text&&r.range===reportF.range)h+='<div style="white-space:pre-wrap;margin-top:10px;font-size:14px">'+esc(r.text)+'</div><div class="muted small" style="margin-top:6px">生成于 '+fmtDay(r.at)+' '+fmtTime(r.at)+' · 大模型生成，仅供理解数据参考，不构成医疗建议</div>';
+  }
+  h+='</div>';
+  if(!st){
+    h+='<div class="card empty"><div class="e">📄</div><div>这个时间段还没有记录</div><div class="small muted">先记几条，报告会自动生成</div></div>';
+  }else{
+    const row=(v,k)=>'<div class="metric"><div class="v">'+v+'</div><div class="k">'+k+'</div></div>';
+    h+='<div class="card"><div class="metric-grid">'+
+      row(st.n,'测量次数')+row(st.okRate+'%','达标率')+
+      row(st.fastMean!=null?fmtVal(st.fastMean):'—','空腹均值')+row(st.postMean!=null?fmtVal(st.postMean):'—','餐后均值')+
+      row(fmtVal(st.max),'最高')+row(fmtVal(st.min),'最低')+
+      row(st.hypo,'低血糖次数')+row(st.medRate+'%','服药打卡率')+
+      '</div></div>';
+    const metaParts=[];
+    if(st.w)metaParts.push('体重 '+st.w.v1+' kg（'+fmtMD(st.w.ts)+'）');
+    if(st.h)metaParts.push('HbA1c '+st.h.v1+'%（'+fmtMD(st.h.ts)+'）');
+    if(st.b)metaParts.push('血压 '+st.b.v1+'/'+st.b.v2+' mmHg（'+fmtMD(st.b.ts)+'）');
+    if(metaParts.length)h+='<div class="card"><div class="card-title">其他指标</div>'+metaParts.map(t=>'<div class="muted" style="margin:2px 0">'+t+'</div>').join('')+'</div>';
+  }
+  if(S.medNote)h+='<div class="card"><div class="card-title">用药方案</div><div class="muted">'+esc(S.medNote)+'</div></div>';
+  h+='<div class="card no-print"><div class="card-title">导出</div>'+
+    '<button class="btn-accent block" data-action="print">🖨 打印 / 另存为 PDF</button>'+
+    '<button class="btn-ghost block" data-action="csv">下载 CSV（Excel 可打开）</button>'+
+    '<div class="muted small" style="margin-top:8px">打印时只输出报告内容。空腹=至少 8 小时未进食；餐后 2h 从吃第一口饭开始计时。</div></div>';
+  return h;
+}
+/* ---------- 我的 ---------- */
+function acc(title,body){return '<div class="acc"><button data-action="acc">'+title+'<span class="arrow">▾</span></button><div class="acc-body" hidden>'+body+'</div></div>';}
+function viewMe(){
+  const t=S.targets;
+  const ai=S.ai||{key:'',base:'',model:''};
+  const metaList=S.metas.slice().sort((a,b)=>b.ts-a.ts).slice(0,12);
+  const metaLabel=m=>m.kind==='weight'?'体重 '+m.v1+' kg':m.kind==='hba1c'?'HbA1c '+m.v1+'%':'血压 '+m.v1+'/'+(m.v2!=null?m.v2:'—')+' mmHg';
+  let h='';
+  h+='<div class="card"><div class="card-title">单位与目标</div>'+
+    '<div class="field"><label>血糖单位（新记录按此单位输入）</label>'+
+    '<div class="seg"><button data-action="unit" data-val="mmol" class="'+(S.unit==='mmol'?'on':'')+'">mmol/L</button><button data-action="unit" data-val="mgdl" class="'+(S.unit==='mgdl'?'on':'')+'">mg/dL</button></div></div>'+
+    '<div class="targets-row">'+
+    '<div><span>空腹下限</span><input type="number" step="0.1" data-set="fastLo" value="'+t.fastLo+'"></div>'+
+    '<div><span>空腹上限</span><input type="number" step="0.1" data-set="fastHi" value="'+t.fastHi+'"></div>'+
+    '<div><span>餐后上限</span><input type="number" step="0.1" data-set="postHi" value="'+t.postHi+'"></div>'+
+    '</div>'+
+    '<div class="field" style="margin-bottom:2px"><label>低血糖线</label><input type="number" step="0.1" data-set="hypo" value="'+t.hypo+'" style="max-width:130px"></div>'+
+    '<div class="muted small" style="margin-top:6px">目标值按当前单位填写。中国 2 型糖尿病指南参考：空腹 4.4–7.0、餐后 2h &lt;10.0、低血糖 ≤3.9 mmol/L；请以医生建议为准。</div></div>';
+  h+='<div class="card"><div class="card-title">个人资料</div>'+
+    '<div class="field"><label>称呼</label><input type="text" data-set="name" value="'+esc(S.name)+'" placeholder="例如：妈妈"></div>'+
+    '<div class="field"><label>确诊年份</label><input type="text" data-set="dxYear" value="'+esc(S.dxYear||'')+'" placeholder="例如：2021"></div>'+
+    '<div class="field"><label>用药方案（会显示在报告里）</label><input type="text" data-set="medNote" value="'+esc(S.medNote||'')+'" placeholder="例如：二甲双胍 0.5g 每日两次"></div></div>';
+  h+='<div class="card"><div class="card-title">其他指标</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'+
+    '<select id="metaKind"><option value="weight">体重</option><option value="hba1c">HbA1c</option><option value="bp">血压</option></select>'+
+    '<input type="number" id="metaV1" placeholder="数值">'+
+    '<input type="number" id="metaV2" placeholder="舒张压" hidden>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px"><input type="text" id="metaNote" placeholder="备注（可选）"><button class="btn-accent" data-action="metaSave">保存</button></div>'+
+    (metaList.length?'<div style="margin-top:10px">'+metaList.map(m=>'<div class="log-item"><div class="log-meta">'+metaLabel(m)+'<span class="muted small"> · '+fmtMD(m.ts)+(m.note?' · '+esc(m.note):'')+'</span></div><button class="icon-btn" data-action="metaDel" data-id="'+m.id+'" style="color:var(--low)">🗑</button></div>').join('')+'</div>':'<div class="muted small" style="margin-top:8px">记下体重、HbA1c、血压，和血糖一起看变化。</div>')+
+    '</div>';
+  h+='<div class="card"><div class="card-title">今日提示</div>'+
+    '<label class="row-between" style="padding:6px 0"><span>空腹未测时提示</span><input type="checkbox" data-set="remFast"'+(S.reminders.fast?' checked':'')+'></label>'+
+    '<label class="row-between" style="padding:6px 0"><span>没有餐后记录时提示</span><input type="checkbox" data-set="remPost"'+(S.reminders.post?' checked':'')+'></label>'+
+    '<div class="muted small">网页不能像 App 那样后台推送，这里的提示只在打开首页时显示。</div></div>';
+  h+='<div class="card"><div class="card-title">AI 分析设置（可选）</div>'+
+    '<div class="field"><label>接口预设</label><select id="aiPreset"><option value="">自定义</option>'+AI_PRESETS.map(p=>'<option value="'+p.base+'|'+p.model+'">'+p.name+'</option>').join('')+'</select></div>'+
+    '<div class="field"><label>接口地址（完整 URL）</label><input type="text" id="aiBase" value="'+esc(ai.base||'')+'" placeholder="https://api.deepseek.com/chat/completions"></div>'+
+    '<div class="field"><label>模型名</label><input type="text" id="aiModel" value="'+esc(ai.model||'')+'" placeholder="deepseek-chat"></div>'+
+    '<div class="field"><label>API Key</label><input type="password" id="aiKey" value="'+esc(ai.key||'')+'" placeholder="sk-..." autocomplete="off"></div>'+
+    '<button class="btn-accent block" data-action="aiSave">保存设置</button>'+
+    '<button class="btn-ghost block" data-action="aiTest">测试连接（会发一条小请求）</button>'+
+    '<div class="muted small" style="margin-top:8px">Key 只保存在本机浏览器，请求直接发往所选接口，数据会上传到你选择的 AI 服务商；按用量计费（DeepSeek 约每百万字 1–2 元）。不要在公共电脑上使用。解读内容仅供理解数据参考，不构成医疗建议。</div></div>';
+  h+='<div class="card"><div class="card-title">AI 问诊（方案二，可选）</div>'+
+    '<div class="field"><label>Cloudflare Worker 网址</label><input type="text" data-set="workerUrl" value="'+esc(S.workerUrl||'')+'" placeholder="https://你的worker.workers.dev"></div>'+
+    '<div class="field"><label>知识库文件地址</label><input type="text" data-set="kbUrl" value="'+esc(S.kbUrl||'med-kb.json')+'" placeholder="med-kb.json"></div>'+
+    '<div class="muted small">「问诊」页会先在浏览器本地检索 8 千条中文医学问答，再经你部署的 Cloudflare Worker 转发给 DeepSeek 生成回答；API Key 只放在 Worker 密钥里，网页代码不含 Key。部署：① 在 Cloudflare 创建 Worker，粘贴仓库里的 worker.js；② Worker 设置里添加密钥 DEEPSEEK_API_KEY（可选 ALLOW_ORIGIN 限制来源）；③ 把 med-kb.json 与本页放同一目录；④ 上面填好 Worker 网址。注意与「AI 分析设置」的区别：那个直连你填的接口分析报告数据，这个用于医学问诊。</div></div>';
+  h+='<div class="card"><div class="card-title">数据</div>'+
+    '<div class="muted small" style="margin-bottom:8px">全部数据只保存在本机浏览器，清缓存或换设备会丢失。上次备份：'+(S.lastBackup?(fmtDay(S.lastBackup)+' '+fmtTime(S.lastBackup)):'还没有导出过')+'。</div>'+
+    '<button class="btn-accent block" data-action="json">导出备份（JSON，推荐定期做）</button>'+
+    '<button class="btn-ghost block" data-action="import">从备份恢复</button>'+
+    '<button class="btn-ghost block" data-action="csv">导出 CSV</button>'+
+    '<button class="btn-ghost block danger" data-action="clear">清空全部记录</button></div>';
+  h+='<div class="card"><div class="card-title">指标解释</div>'+
+    acc('空腹血糖','至少 8 小时未进食（通常早晨、未进食未用药）测得的血糖。指南一般建议 4.4–7.0 mmol/L。')+
+    acc('餐后 2 小时血糖','从吃第一口饭开始计时 2 小时后测得的血糖。指南一般建议 &lt;10.0 mmol/L。')+
+    acc('低血糖','糖尿病患者血糖 ≤3.9 mmol/L 即为低血糖，可能出现心慌、出汗、手抖，需及时补糖；反复发生请就医。')+
+    acc('达标率 / TIR','目标范围内时间（TIR）指血糖处于目标范围内的时间占比，连续监测一般要求 &gt;70%。本工具按每条读数的时段目标计算达标条数占比，只能近似。')+
+    acc('HbA1c','糖化血红蛋白，反映近 2–3 个月的平均血糖，指南一般目标 &lt;7.0%，具体目标请遵医嘱。')+
+    acc('GMI','葡萄糖管理指标：GMI(%)=3.31+0.02392×平均血糖(mg/dL)，由均值估算，与 HbA1c 近似但不完全等同。')+
+    '</div>';
+  h+='<div class="card"><div class="card-title">隐私与免责</div><div class="muted small">数据完全保存在本机浏览器（localStorage），不上传任何服务器；请定期导出备份。本工具仅用于记录和查看血糖变化，不提供任何医疗、用药或剂量建议；诊断与治疗请咨询医生，血糖值异常时请及时就医。</div></div>';
+  return h;
+}
+function saveMeta(){
+  const k=$('#metaKind').value;
+  const v1=parseFloat($('#metaV1').value);
+  const v2=parseFloat($('#metaV2').value);
+  const note=($('#metaNote').value||'').trim();
+  if(!isFinite(v1)||v1<=0){toast('请输入有效数值');return;}
+  if(k==='bp'&&(!isFinite(v2)||v2<=0)){toast('请输入舒张压');return;}
+  S.metas.push({id:'m'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),ts:Date.now(),kind:k,v1:v1,v2:(k==='bp'&&isFinite(v2))?v2:null,note:note});
+  save();render();toast('已保存');
+}
+/* ---------- 记一条 / 编辑 ---------- */
+let addS=null;
+function defaultTag(ts){
+  const h=new Date(ts).getHours();
+  if(h>=5&&h<10)return 'fast';
+  if(h>=10&&h<14)return 'ln';
+  if(h>=14&&h<17)return 'rand';
+  if(h>=17&&h<21)return 'dn';
+  if(h>=21||h<3)return 'bed';
+  return 'night';
+}
+function openAdd(editId){
+  const r=editId?S.readings.find(x=>x.id===editId):null;
+  const prefill=r?(S.unit==='mgdl'?String(Math.round(r.v*MGL)):(+r.v).toFixed(1)):'';
+  addS={editId:r?r.id:null,valStr:prefill,unitSel:S.unit,ts:r?r.ts:Date.now(),tag:r?r.tag:defaultTag(Date.now()),ctx:r?(r.ctx||[]).slice():[],src:r?(r.src||'指尖血'):'指尖血',note:r?(r.note||''):''};
+  renderSheet();
+  openSheet();
+}
+function renderSheet(){
+  const isEdit=!!addS.editId;
+  const isToday=dateKey(addS.ts)===dateKey(Date.now());
+  const unitLabel=addS.unitSel==='mgdl'?'mg/dL':'mmol/L';
+  $('#sheetPanel').innerHTML=
+    '<div class="sheet-head"><h2>'+(isEdit?'编辑记录':'记一条')+'</h2><button class="icon-btn" data-action="sheetClose">✕</button></div>'+
+    '<div class="center"><span class="bigval" id="sheetVal">'+(addS.valStr||'—')+'</span><span class="unit">'+unitLabel+'</span></div>'+
+    '<div class="chip-wrap" style="justify-content:center">'+
+    '<button class="chip'+(addS.unitSel==='mmol'?' on':'')+'" data-action="unitSel" data-val="mmol">mmol/L</button>'+
+    '<button class="chip'+(addS.unitSel==='mgdl'?' on':'')+'" data-action="unitSel" data-val="mgdl">mg/dL</button>'+
+    '</div>'+
+    '<div class="kp">'+
+    ['1','2','3','4','5','6','7','8','9','.','0'].map(k=>'<button data-action="k" data-k="'+k+'">'+k+'</button>').join('')+
+    '<button class="k-back" data-action="k" data-k="back">⌫</button>'+
+    '</div>'+
+    '<div class="field"><label>时间'+(isToday?'':'（不是今天，会标记为补录）')+'</label><input type="datetime-local" id="sheetTime" value="'+toLocalInput(addS.ts)+'"></div>'+
+    '<div class="field"><label>时段</label><div class="chip-wrap">'+TAG_META.map(t=>'<button class="chip'+(addS.tag===t.id?' on':'')+'" data-action="sTag" data-val="'+t.id+'">'+t.label+'</button>').join('')+'</div></div>'+
+    '<div class="field"><label>情景（可多选）</label><div class="chip-wrap">'+CTX_TAGS.map(c=>'<button class="chip'+(addS.ctx.indexOf(c[0])>=0?' on':'')+'" data-action="sCtx" data-val="'+c[0]+'">'+c[1]+'</button>').join('')+'</div></div>'+
+    '<div class="field"><label>来源</label><select id="sheetSrc">'+SOURCES.map(s=>'<option'+(addS.src===s?' selected':'')+'>'+s+'</option>').join('')+'</select></div>'+
+    '<div class="field"><label>备注</label><input type="text" id="sheetNote" value="'+esc(addS.note)+'" placeholder="例如：昨晚没睡好"></div>'+
+    '<button class="btn-accent block" data-action="save">保存</button>'+
+    '<button class="btn-ghost block" data-action="saveMore">保存并再记一条</button>';
+}
+function updateSheetVal(){
+  const el=$('#sheetVal');
+  if(!el)return;
+  el.textContent=addS.valStr||'—';
+  const un=el.nextElementSibling;
+  if(un)un.textContent=addS.unitSel==='mgdl'?'mg/dL':'mmol/L';
+}
+function sheetAddDigit(k){
+  if(k==='back'){addS.valStr=addS.valStr.slice(0,-1);}
+  else{
+    if(k==='.'&&addS.valStr.indexOf('.')>=0)return;
+    if(k==='.'&&!addS.valStr)addS.valStr='0';
+    const next=addS.valStr+k;
+    const parts=next.split('.');
+    if(parts[0].length>3)return;
+    if(parts.length>1&&parts[1].length>2)return;
+    addS.valStr=next;
+  }
+  updateSheetVal();
+}
+function saveSheet(again){
+  const srcEl=$('#sheetSrc');if(srcEl)addS.src=srcEl.value;
+  const nEl=$('#sheetNote');if(nEl)addS.note=nEl.value.trim();
+  const v=parseVal(addS.valStr,addS.unitSel);
+  if(v==null){toast('请输入有效血糖值');return;}
+  const ts=addS.ts;
+  if(!isFinite(ts)){toast('时间格式不对');return;}
+  if(ts>Date.now()+300000&&!confirm('时间在未来，确定没填错吗？'))return;
+  const u=addS.unitSel==='mgdl'?'mg/dL':'mmol/L';
+  if(v<2.8&&!confirm('数值很低（<2.8 '+u+'）。低血糖可能危险，请确认数值无误。仍要保存？'))return;
+  if(v>25&&!confirm('数值很高（>25 '+u+'）。请确认数值无误，若身体不适请及时就医。仍要保存？'))return;
+  const rec={id:addS.editId||('r'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)),ts:ts,v:v,tag:addS.tag,ctx:addS.ctx.slice(),note:addS.note,src:addS.src,recalled:dateKey(ts)!==dateKey(Date.now())};
+  if(addS.editId){const i=S.readings.findIndex(x=>x.id===rec.id);if(i>=0)S.readings[i]=rec;else S.readings.push(rec);}
+  else S.readings.push(rec);
+  S.readings.sort((a,b)=>a.ts-b.ts||(a.id<b.id?-1:1));
+  save();
+  closeSheet();
+  toast(again?'已保存，继续记下一条':'已保存');
+  render();
+  if(again){
+    const nextTs=Math.min(Date.now(),ts+2*3600000);
+    addS={editId:null,valStr:'',unitSel:addS.unitSel,ts:nextTs,tag:defaultTag(nextTs),ctx:addS.ctx.slice(),src:addS.src,note:''};
+    renderSheet();
+    openSheet();
+  }
+}
+function openSheet(){$('#sheet').hidden=false;document.body.classList.add('sheet-open');}
+function closeSheet(){$('#sheet').hidden=true;document.body.classList.remove('sheet-open');}
+/* ---------- 首次引导 ---------- */
+function showOnboard(){$('#onboard').hidden=false;}
+function onboardDone(){
+  const unitBtn=$('#obUnit .on');
+  S.unit=unitBtn?unitBtn.dataset.val:'mmol';
+  const g=id=>{const el=document.getElementById(id);const v=parseFloat(el&&el.value);return (isFinite(v)&&v>0)?v:null;};
+  const lo=g('obFastLo'),hi=g('obFastHi'),ph=g('obPostHi');
+  if(lo!=null)S.targets.fastLo=lo;
+  if(hi!=null)S.targets.fastHi=hi;
+  if(ph!=null)S.targets.postHi=ph;
+  const nEl=$('#obName');
+  S.name=nEl?nEl.value.trim():'';
+  if(S.targets.fastLo>=S.targets.fastHi){S.targets.fastLo=4.4;S.targets.fastHi=7.0;}
+  S.onboarded=true;
+  save();
+  $('#onboard').hidden=true;
+  render();
+}
+/* ---------- 导入导出 ---------- */
+function download(name,content,mime){
+  const blob=new Blob([content],{type:mime});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=name;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function exportJSON(){
+  S.lastBackup=Date.now();
+  save();
+  download('血糖记录备份-'+dateKey(Date.now())+'.json',JSON.stringify(S,null,2),'application/json');
+  toast('备份已导出');
+}
+function exportCSV(){
+  const head=['日期','时间','血糖_'+dispUnit(),'血糖_mmol/L','血糖_mg/dL','时段','达标情况','情景标签','备注','来源','补录'];
+  const rows=S.readings.slice().sort((a,b)=>a.ts-b.ts).map(r=>{
+    const st=ST_META[stOfReading(r)].label;
+    return [dateKey(r.ts),fmtTime(r.ts),fmtVal(r.v),r.v.toFixed(2),Math.round(r.v*MGL),tagById(r.tag).label,st,(r.ctx||[]).map(ctxLabel).join('、'),r.note||'',r.src||'',r.recalled?'是':'否']
+      .map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',');
+  });
+  const csv='\uFEFF'+head.join(',')+'\n'+rows.join('\n');
+  download('血糖记录-'+dateKey(Date.now())+'.csv',csv,'text/csv;charset=utf-8');
+  S.lastBackup=Date.now();
+  save();
+  toast('CSV 已导出');
+}
+function handleImport(input){
+  const f=input.files&&input.files[0];
+  if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const o=JSON.parse(rd.result);
+      if(!o||!Array.isArray(o.readings)){toast('文件格式不对');return;}
+      if(!confirm('导入会用备份文件的内容覆盖当前全部数据，确定继续？'))return;
+      const d=defaults();
+      S=Object.assign(d,o,{targets:Object.assign(d.targets,o.targets||{}),reminders:Object.assign(d.reminders,o.reminders||{})});
+      if(!Array.isArray(S.readings))S.readings=[];
+      if(!Array.isArray(S.metas))S.metas=[];
+      if(!S.medDays)S.medDays={};
+      S.readings.sort((a,b)=>a.ts-b.ts);
+      S.lastBackup=Date.now();
+      S.onboarded=true;
+      save();
+      render();
+      toast('已恢复');
+    }catch(err){toast('无法读取该文件');}
+  };
+  rd.readAsText(f);
+  input.value='';
+}
+function clearAll(){
+  if(!confirm('将清空全部读数、指标记录和打卡（设置保留）。此操作不可恢复，确定吗？'))return;
+  if(!confirm('再确认一次：真的要清空全部记录吗？'))return;
+  S.readings=[];S.metas=[];S.medDays={};S.chat=[];S.aiResult=null;
+  save();render();toast('已清空');
+}
+/* ---------- 事件 ---------- */
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action]');
+  if(!el)return;
+  const a=el.dataset.action;
+  switch(a){
+    case 'nav': go(el.dataset.nav); break;
+    case 'add': openAdd(); break;
+    case 'edit': openAdd(el.dataset.id); break;
+    case 'del':
+      if(confirm('删除这条记录？')){
+        S.readings=S.readings.filter(r=>r.id!==el.dataset.id);
+        save();render();toast('已删除');
+      }
+      break;
+    case 'sheetClose': closeSheet(); break;
+    case 'k': sheetAddDigit(el.dataset.k); break;
+    case 'unitSel':
+      addS.unitSel=el.dataset.val;
+      $$('#sheetPanel [data-action="unitSel"]').forEach(b=>b.classList.toggle('on',b.dataset.val===addS.unitSel));
+      updateSheetVal();
+      break;
+    case 'sTag':
+      addS.tag=el.dataset.val;
+      $$('#sheetPanel [data-action="sTag"]').forEach(b=>b.classList.toggle('on',b.dataset.val===addS.tag));
+      break;
+    case 'sCtx': {
+      const v=el.dataset.val;
+      const i=addS.ctx.indexOf(v);
+      if(i>=0)addS.ctx.splice(i,1);else addS.ctx.push(v);
+      el.classList.toggle('on');
+      break;
+    }
+    case 'save': saveSheet(false); break;
+    case 'saveMore': saveSheet(true); break;
+    case 'med': {
+      const dk=dateKey(Date.now());
+      S.medDays[dk]=!S.medDays[dk];
+      save();render();
+      break;
+    }
+    case 'onboardDone': onboardDone(); break;
+    case 'obUnit':
+      $$('#obUnit button').forEach(b=>b.classList.toggle('on',b===el));
+      break;
+    case 'unit':
+      S.unit=el.dataset.val;
+      save();render();
+      break;
+    case 'json': exportJSON(); break;
+    case 'csv': exportCSV(); break;
+    case 'import': $('#importFile').click(); break;
+    case 'clear': clearAll(); break;
+    case 'print':
+      document.body.classList.add('print-mode');
+      window.print();
+      setTimeout(()=>document.body.classList.remove('print-mode'),600);
+      break;
+    case 'metaSave': saveMeta(); break;
+    case 'metaDel':
+      S.metas=S.metas.filter(m=>m.id!==el.dataset.id);
+      save();render();
+      break;
+    case 'acc': {
+      const body=el.nextElementSibling;
+      if(body){body.hidden=!body.hidden;el.closest('.acc').classList.toggle('open',!body.hidden);}
+      break;
+    }
+    case 'gotoLog': go('log'); break;
+    case 'chatClear':
+      S.chat=[];
+      chatHist=[];
+      save();render();
+      break;
+    case 'aiSave': {
+      S.ai={base:($('#aiBase').value||'').trim(),model:($('#aiModel').value||'').trim(),key:($('#aiKey').value||'').trim()};
+      save();
+      toast('AI 设置已保存');
+      break;
+    }
+    case 'aiTest': {
+      const ai=S.ai||{};
+      if(!(ai.key&&ai.base&&ai.model)){toast('请先填写并保存设置');break;}
+      toast('测试中…');
+      aiCall([{role:'user',content:'你好，请只回复「连接成功」四个字。'}]).then(()=>{toast('连接成功');}).catch(err=>{toast('测试失败：'+(err&&err.message?err.message:err));});
+      break;
+    }
+    case 'aiGen': aiGenerate(); break;
+    case 'copyAnalysis': {
+      const txt=$('#analysisText')?$('#analysisText').textContent:'';
+      const done=()=>toast('已复制');
+      const fail=()=>{
+        const ta=document.createElement('textarea');
+        ta.value=txt;document.body.appendChild(ta);ta.select();
+        try{document.execCommand('copy');done();}catch(err){toast('复制失败，请长按文字手动复制');}
+        ta.remove();
+      };
+      if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done).catch(fail);
+      else fail();
+      break;
+    }
+  }
+});
+document.addEventListener('change',e=>{
+  const el=e.target;
+  if(el.id==='sheetTime'){addS.ts=fromLocalInput(el.value);return;}
+  if(el.id==='sheetSrc'){addS.src=el.value;return;}
+  if(el.id==='logRange'){logF.range=el.value==='all'?'all':+el.value;render();return;}
+  if(el.id==='logTag'){logF.tag=el.value;render();return;}
+  if(el.id==='logStatus'){logF.status=el.value;render();return;}
+  if(el.id==='trendRange'){trendF.range=+el.value;render();return;}
+  if(el.id==='reportRange'){reportF.range=+el.value;render();return;}
+  if(el.id==='metaKind'){const v2=$('#metaV2');if(v2)v2.hidden=el.value!=='bp';return;}
+  if(el.id==='aiPreset'){const p=el.value;if(p){const parts=p.split('|');const b=$('#aiBase'),m=$('#aiModel');if(b)b.value=parts[0];if(m)m.value=parts[1];}return;}
+  if(el.id==='importFile'){handleImport(el);return;}
+  if(el.dataset.set)handleSet(el);
+});
+function handleSet(el){
+  const k=el.dataset.set;
+  if(k==='remFast'){S.reminders.fast=el.checked;save();return;}
+  if(k==='remPost'){S.reminders.post=el.checked;save();return;}
+  if(k==='fastLo'||k==='fastHi'||k==='postHi'||k==='hypo'){
+    const v=parseFloat(el.value);
+    if(isFinite(v)&&v>0&&v<40)S.targets[k]=v;
+    save();render();
+    return;
+  }
+  if(k==='name'||k==='dxYear'||k==='medNote'){S[k]=el.value.trim();save();return;}
+  if(k==='workerUrl'||k==='kbUrl'){
+    S[k]=el.value.trim();
+    if(k==='kbUrl'){KB=null;kbState='idle';}
+    save();
+    return;
+  }
+}
+document.addEventListener('submit',e=>{
+  if(e.target&&e.target.id==='chatForm'){
+    e.preventDefault();
+    if(!askConfigured()){toast('请先在「我的 → AI 问诊」配置 Worker 网址');return;}
+    const inp=$('#chatInput');
+    const text=inp?(inp.value||'').trim():'';
+    if(!text)return;
+    if(inp)inp.value='';
+    sendChat(text);
+  }
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!$('#sheet').hidden)closeSheet();
+});
+let rzT;
+window.addEventListener('resize',()=>{
+  clearTimeout(rzT);
+  rzT=setTimeout(()=>{if(view==='trends')drawTrends();},150);
+});
+$('#sheet').addEventListener('click',e=>{
+  if(e.target.id==='sheet')closeSheet();
+});
+/* ---------- 启动 ---------- */
+(function init(){
+  if(!S.onboarded){showOnboard();renderNav();}
+  else render();
+})();
+</script>
+</body>
+</html>
