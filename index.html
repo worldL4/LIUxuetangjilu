@@ -663,9 +663,13 @@ function loadAskKB(){
     if(tip)tip.textContent='知识库加载失败：请把 med-kb.json 放到本页同目录（可在「我的 → AI 问诊」改地址）';
   });
 }
-function askConfigured(){
+function askWorkerConfigured(){
   const u=(S.workerUrl||'').trim();
   return !!u&&/^https?:\/\//.test(u)&&u.indexOf('你的worker')<0&&u.indexOf('xxx')<0;
+}
+function askConfigured(){
+  const ai=S.ai||{};
+  return askWorkerConfigured()||!!String(ai.key||'').trim();
 }
 function renderChatHTML(){
   return S.chat.map(m=>{
@@ -681,7 +685,7 @@ function viewAsk(){
   const ok=askConfigured();
   let h='';
   if(!ok){
-    h+='<div class="banner warn">AI 问诊还没配置：① 在 Cloudflare 创建 Worker，粘贴仓库里的 worker.js；② Worker 设置里添加密钥 DEEPSEEK_API_KEY；③ 把 med-kb.json 与本页放同一目录；④ 把 Worker 网址填到「我的 → AI 问诊」。<button class="btn-ghost" data-action="nav" data-nav="me" style="margin-left:6px;padding:4px 10px">去配置</button></div>';
+    h+='<div class="banner warn">AI 问诊还没配置：在「我的 → AI 分析设置」填入 DeepSeek API Key 即可直接提问（无需 Cloudflare Worker）；也可按原方案在「我的 → AI 问诊」填写 Worker 网址。<button class="btn-ghost" data-action="nav" data-nav="me" style="margin-left:6px;padding:4px 10px">去配置</button></div>';
   }
   h+='<div class="banner info">本助手由 AI 生成内容，仅供参考，不能替代医生诊断；急重症请立即就医。</div>';
   h+='<div class="card" style="padding:10px 12px">'+
@@ -718,22 +722,45 @@ function sendChat(text){
   if(chatHist.length>12)chatHist=chatHist.slice(-12);
   const refs=searchLocal(text,3);
   chatPending();
+  const done=(answer,err)=>{
+    chatPopPending();
+    if(err){chatAppend('ai',err,null,true);return;}
+    chatAppend('ai',answer,refs);
+    chatHist.push({role:'assistant',content:answer});
+    if(chatHist.length>12)chatHist=chatHist.slice(-12);
+  };
+  if(!askWorkerConfigured()){
+    const ai=S.ai||{};
+    const key=String(ai.key||'').trim();
+    if(!key){done('','未配置 API Key：请到「我的 → AI 分析设置」填入 DeepSeek API Key');return;}
+    const base=String(ai.base||'').trim()||'https://api.deepseek.com/chat/completions';
+    const model=String(ai.model||'').trim()||'deepseek-chat';
+    const refTxt=refs.length?refs.map(r=>'【参考·'+(r.d||'未知科室')+'】问：'+r.q+'\n答：'+r.a).join('\n\n'):'（无匹配参考）';
+    const messages=[
+      {role:'system',content:'你是医疗健康问答助手。请优先依据【参考问答】回答；参考不足时用通用医学知识补充，不要编造医学结论。回答用简体中文，简洁分点、给可行建议；涉及诊断、用药、检查、急重症时，必须提醒用户及时就医、以医生面诊为准。'},
+      ...chatHist.slice(0,-1).slice(-6),
+      {role:'user',content:'以下是本地医学知识库中与问题最相关的问答（仅供参考）：\n'+refTxt+'\n\n用户问题：'+text}
+    ];
+    fetch(base,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+      body:JSON.stringify({model:model,messages:messages,temperature:0.3,max_tokens:1500})
+    }).then(r=>r.json().then(j=>({ok:r.ok,j:j}))).then(x=>{
+      if(!x.ok){done('','接口错误：'+((x.j&&x.j.error&&x.j.error.message)||JSON.stringify(x.j).slice(0,120)));return;}
+      const t=x.j&&x.j.choices&&x.j.choices[0]&&x.j.choices[0].message?x.j.choices[0].message.content:'';
+      done(t||'（接口返回内容为空）');
+    }).catch(e=>done('','请求失败：'+(e&&e.message?e.message:e)+'（请检查 API Key 与网络）'));
+    return;
+  }
   fetch((S.workerUrl||'').trim().replace(/\/+$/,'')+'/ask',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({q:text,refs:refs,history:chatHist})
   }).then(r=>r.json()).then(data=>{
-    chatPopPending();
-    if(data.error){
-      chatAppend('ai','出错了：'+data.error,null,true);
-    }else{
-      chatAppend('ai',data.answer,refs);
-      chatHist.push({role:'assistant',content:data.answer});
-      if(chatHist.length>12)chatHist=chatHist.slice(-12);
-    }
+    if(data.error){done('','出错了：'+data.error);}
+    else{done(data.answer);}
   }).catch(err=>{
-    chatPopPending();
-    chatAppend('ai','请求失败：'+err+'（请确认 Worker 已部署、网址正确）',null,true);
+    done('','请求失败：'+err+'（请确认 Worker 已部署、网址正确）');
   });
 }
 /* ---------- AI 大模型（可选，自带 API Key） ---------- */
@@ -905,7 +932,7 @@ function viewMe(){
   h+='<div class="card"><div class="card-title">AI 问诊（方案二，可选）</div>'+
     '<div class="field"><label>Cloudflare Worker 网址</label><input type="text" data-set="workerUrl" value="'+esc(S.workerUrl||'')+'" placeholder="https://你的worker.workers.dev"></div>'+
     '<div class="field"><label>知识库文件地址</label><input type="text" data-set="kbUrl" value="'+esc(S.kbUrl||'med-kb.json')+'" placeholder="med-kb.json"></div>'+
-    '<div class="muted small">「问诊」页会先在浏览器本地检索 8 千条中文医学问答，再经你部署的 Cloudflare Worker 转发给 DeepSeek 生成回答；API Key 只放在 Worker 密钥里，网页代码不含 Key。部署：① 在 Cloudflare 创建 Worker，粘贴仓库里的 worker.js；② Worker 设置里添加密钥 DEEPSEEK_API_KEY（可选 ALLOW_ORIGIN 限制来源）；③ 把 med-kb.json 与本页放同一目录；④ 上面填好 Worker 网址。注意与「AI 分析设置」的区别：那个直连你填的接口分析报告数据，这个用于医学问诊。</div></div>';
+    '<div class="muted small">「问诊」页会先在浏览器本地检索 8 千条中文医学问答，再经你部署的 Cloudflare Worker 转发给 DeepSeek 生成回答；API Key 只放在 Worker 密钥里，网页代码不含 Key。部署：① 在 Cloudflare 创建 Worker，粘贴仓库里的 worker.js；② Worker 设置里添加密钥 DEEPSEEK_API_KEY（可选 ALLOW_ORIGIN 限制来源）；③ 把 med-kb.json 与本页放同一目录；④ 上面填好 Worker 网址。注意：若无法使用 Cloudflare，只需在上方「AI 分析设置」填入 DeepSeek API Key，问诊页即可直连提问（Key 仅存本机浏览器），下方 Worker 网址留空即可。</div></div>';
   h+='<div class="card"><div class="card-title">数据</div>'+
     '<div class="muted small" style="margin-bottom:8px">全部数据只保存在本机浏览器，清缓存或换设备会丢失。上次备份：'+(S.lastBackup?(fmtDay(S.lastBackup)+' '+fmtTime(S.lastBackup)):'还没有导出过')+'。</div>'+
     '<button class="btn-accent block" data-action="json">导出备份（JSON，推荐定期做）</button>'+
@@ -1237,7 +1264,7 @@ function handleSet(el){
 document.addEventListener('submit',e=>{
   if(e.target&&e.target.id==='chatForm'){
     e.preventDefault();
-    if(!askConfigured()){toast('请先在「我的 → AI 问诊」配置 Worker 网址');return;}
+    if(!askConfigured()){toast('请先在「我的 → AI 分析设置」填入 DeepSeek API Key，或配置 Worker 网址');return;}
     const inp=$('#chatInput');
     const text=inp?(inp.value||'').trim():'';
     if(!text)return;
